@@ -1,4 +1,5 @@
 #include <stdio_ext.h>
+#include <netdb.h>
 #include "you_need_it_man.h"
 #define PORT 5555
 #define KEY_LENGTH  2048
@@ -12,9 +13,16 @@ typedef struct for_thread //струтура для передачи аргум�
 	RSA* keypair;
 	int *flag;
 }For_Thread; 
-int try_connect()
+int try_connect(char *host)
 {
-    int sock;
+    struct hostent *h;
+    h = gethostbyname(host);
+    if (!h|| h->h_length != sizeof (struct in_addr))
+    {
+	printf("No such host\n");
+	return -1;
+    }
+    int sock=0;
     struct sockaddr_in addr;
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0)
@@ -23,8 +31,9 @@ int try_connect()
         return -1;
     }
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(PORT); // или любой другой порт...
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);//127.0.0.1
+    addr.sin_port = htons(PORT); 
+    //addr.sin_addr.s_addr = *(struct in_addr *)h->h_addr;//127.0.0.1
+    addr.sin_addr = *(struct in_addr *) h->h_addr;
     if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {
         perror("connect");
@@ -67,7 +76,8 @@ void* thread_func(void* arg)
 }
 int main(int argc,char *argv[])
 {
-    int sock;//сокет для связи
+    char *host=NULL;//IP для подключения
+    int sock=0;//сокет для связи
     int encrypt_len=KEY_LENGTH/8;//размер сообщения
     char *buf= malloc(encrypt_len); //буфер для отправляемого текста
     char *encrypt= malloc(encrypt_len); //буфер для шифрования текста
@@ -75,6 +85,15 @@ int main(int argc,char *argv[])
     char *decrypt= malloc(encrypt_len);//массив для полученного расшифрованного сообщения
     RSA *rsa= NULL;//структура с публичным ключом сервеера
     char name[17];//имя пользователя
+    if(argc==2)
+    {
+      host = calloc(strlen(argv[1])+1,sizeof(char));
+      strcpy(host, argv[1]);
+    }else
+    {
+      printf("Неверное число аргументов\n");
+      return -1;
+    }
     printf("Введите ваше имя.Не более 16 символов\n");
     fgets(name, 16, stdin);
     *(name+strlen(name)-1)=':';
@@ -82,7 +101,7 @@ int main(int argc,char *argv[])
     __fpurge(stdin);//на случай если пользователь ввел больше 16 символов
     RSA *keypair = RSA_generate_key(KEY_LENGTH, PUB_EXP, NULL, NULL);//генерация пары ключей
     pthread_t thread_write;//указатель на поток для приема сообщений
-    sock=try_connect();
+    sock=try_connect(host);
     if(sock==-1)
     {
       perror("Не удалось соедениться");
@@ -101,8 +120,8 @@ int main(int argc,char *argv[])
     pthread_create(&thread_write, NULL, thread_func,(void*)&thread_wr);
     do
     {
-      memset(buf, 0, strlen(buf));
-      memset(encrypt, 0, strlen(encrypt));  
+      memset(buf, 0, KEY_LENGTH/8);
+      memset(encrypt, 0, KEY_LENGTH/8);  
       strcpy(buf, name);
       fgets(buf+strlen(name),KEY_LENGTH/8, stdin);
       encrypt_it(&encrypt_len,rsa,buf,encrypt);

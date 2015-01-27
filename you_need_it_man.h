@@ -21,11 +21,11 @@ RSA* put_public_key(int sock)
     
     char  *pub_key;//полученый публичный ключ
     BIO *keybio ;
-    size_t pub_len; 
+    size_t pub_len=0; 
     recv(sock, &pub_len, sizeof(pub_len), 0);
     pub_key=malloc(pub_len);
     recv(sock, pub_key, pub_len, 0);
-    keybio = BIO_new_mem_buf(pub_key,-1);
+    keybio = BIO_new_mem_buf(pub_key,pub_len);
     RSA *rsa = PEM_read_bio_RSAPublicKey(keybio,NULL,NULL, NULL);
     free(keybio);
     return rsa;

@@ -9,17 +9,15 @@ typedef struct for_server_thread //струтура для передачи ар
 	int* sockets;
 	RSA* keypair;
 	RSA** all_keys;
-	int number;
+	size_t number;
 }For_server_Thread; 
-int try_connect(int* listener)
+void try_connect(int* listener)
 {
-  int sock; 
   struct sockaddr_in addr;//структура адреса сокета
   *listener=socket(AF_INET,SOCK_STREAM,0);
   if(*listener<0)
   {
     perror("socket");
-    return -1;
   }
   memset(&addr, '0', sizeof(addr));
   addr.sin_family=AF_INET;
@@ -28,14 +26,12 @@ int try_connect(int* listener)
   if(bind(*listener,(struct sockaddr *)&addr,sizeof(addr))<0)
   {
     perror("blind");
-    return -1;
   }
-  return sock;
 }
 
 RSA*  prepare_socket(int sock,RSA *keypair)
 {
-  size_t pub_len;//размер ключа
+  size_t pub_len=0;//размер ключа
   char *pub_key=get_public_key(&pub_len,keypair);//массив в котором записан публичный ключ
   send(sock, &pub_len,sizeof(pub_len) , 0);
   send(sock, pub_key, pub_len, 0);
@@ -52,7 +48,7 @@ void* thread_accept(void* arg)
   int *sockets=ukaz->sockets;
   RSA *keypair=ukaz->keypair;
   RSA **all_keys=ukaz->all_keys;
-  int number=ukaz->number;
+  size_t number=ukaz->number;
   all_keys[number]=prepare_socket(sock,keypair);
   printf("Соединение установлено\n");
   fflush(stdout);
@@ -78,7 +74,7 @@ int send_all(int number,int *sockets,char *decrypt,int encrypt_len,RSA** all_key
 {
   char *buf= decrypt; //буфер для отправляемого текста
   char *encrypt= malloc(encrypt_len); //буфер для шифрования текста
-  int i;
+  size_t i;
   for(i=0;i<MAX_CLIENTS;i++)
   {
     fflush(stdout);
@@ -94,7 +90,7 @@ int send_all(int number,int *sockets,char *decrypt,int encrypt_len,RSA** all_key
 
 int add_socket(For_server_Thread thread_wr,pthread_t *thread_write)
 {
-  int i; 
+  size_t i; 
   for(i=0;i<MAX_CLIENTS;i++)
   {
     if(thread_wr.sockets[i]==0)
@@ -116,11 +112,8 @@ int main()
   int *sockets=calloc(MAX_CLIENTS,sizeof(int));
   pthread_t thread_write[MAX_CLIENTS];
   RSA *all_keys[MAX_CLIENTS];
-  int sock=try_connect(&listener);
-  if(sock==-1)
-  {
-    return -1;
-  }
+  int sock=-1;
+  try_connect(&listener);
   listen(listener,MAX_CLIENTS);
   while(1)
   {
